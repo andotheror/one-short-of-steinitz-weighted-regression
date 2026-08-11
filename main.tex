@@ -1,0 +1,747 @@
+\documentclass[twoside]{article}
+
+\usepackage[preprint]{aistats2027}
+\usepackage[round,authoryear]{natbib}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{url}
+
+\renewcommand{\bibname}{References}
+\renewcommand{\bibsection}{\subsubsection*{\bibname}}
+\bibliographystyle{apalike}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+\newcommand{\R}{\mathbb R}
+\newcommand{\E}{\mathbb E}
+\newcommand{\cA}{\mathcal A}
+\newcommand{\cD}{\mathcal D}
+\newcommand{\cL}{\mathcal L}
+\newcommand{\cS}{\mathcal S}
+\newcommand{\conv}{\operatorname{conv}}
+\newcommand{\spanop}{\operatorname{span}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\supp}{\operatorname{supp}}
+
+\begin{document}
+\runningauthor{}
+
+\twocolumn[
+\aistatstitle{One Short of Steinitz: Weighted Regression Selection}
+
+\aistatsauthor{Pahan Dewasurendra}
+
+\aistatsaddress{Johns Hopkins University}
+]
+
+\begin{abstract}
+How well can least squares perform on a full dataset after training on a
+small weighted subset? A recent COLT open problem determined the exact
+worst-case ratio for budgets at most the dimension and at least twice the
+dimension, leaving every intermediate budget open and reporting an
+unpublished endpoint argument. We give a complete proof that, for
+$d$-dimensional homogeneous linear regression and the minimum-norm ERM, the
+exact ratio with $2d-1$ selected examples is $1+1/d$.
+
+The proof identifies the only obstruction to exact recovery one example
+below the Steinitz threshold. Unless the nonzero full-loss gradients lie on
+$d$ independent lines and every useful zero-gradient feature is absent,
+$2d-1$ examples recover the full ERM exactly. On the exceptional cross
+configuration, the problem splits into one-dimensional regressions and
+omitting one member of the least-loss line costs at most a $1/d$ fraction
+of the optimum. A matching construction handles the minimum-norm tie rule.
+
+We also give a harmonic lower bound for every intermediate budget and show
+that it is exact for rank-additive circuit decompositions. This class
+contains the extremal construction and isolates the remaining obstacle for
+the full open curve: overlapping positive circuits can only be handled by
+a new reduction, not by ordinary volume sampling.
+\end{abstract}
+
+\section{Introduction}
+
+Data selection asks a deliberately data-centric question. Fix the training
+algorithm, reveal the entire finite dataset, and choose a small subset on
+which to train. How close can the resulting model come to the model trained
+on all examples? This differs from feature selection, random subsampling,
+and label-efficient active learning. The selector here knows both features
+and responses, may assign nonnegative weights, and is evaluated on the
+original observed dataset.
+
+Even homogeneous least squares has a sharp unresolved regime. Let
+$\cA_*$ return the minimum Euclidean-norm empirical risk minimizer. For a
+dataset in $\R^d\times\R$, \citet{hanneke2025data} proved that the worst
+multiplicative loss ratio is infinite below $d$ selected examples, equals
+$d+1$ at $d$, and equals one at $2d$ or more. Their COLT open-problem note
+asks for the exact value between $d$ and $2d$. The authors report belief in
+an unpublished, ad hoc argument for the value $1+1/d$ at $2d-1$
+\citep{hanneke2025open}. The two proved endpoints use different geometric
+tools. Size-$d$ volume sampling gives $d+1$
+\citep{derezinski2017unbiased,derezinski2018reverse}, while Steinitz's
+theorem gives exact recovery at $2d$ \citep{steinitz1916bedingt}.
+
+We give a complete endpoint proof. The argument does not interpolate an
+existing volume-sampling estimate. Instead, it characterizes when the
+$2d$-point Steinitz guarantee cannot be improved by one point. In that
+case all informative gradients form a cross, namely $d$ pairs of opposite
+directions. The regression objective then separates over those directions.
+A one-dimensional averaging argument chooses which pair to leave
+incomplete and gives the factor $1+1/d$.
+
+Our contributions are:
+\begin{itemize}
+\item We prove the exact universal identity
+\begin{equation}
+  \sup_D \frac{L_D^*(2d-1;\cA_*)}{L_D^*}=1+\frac1d.
+  \label{eq:headline}
+\end{equation}
+This includes rank-deficient datasets, zero optimal loss, arbitrary
+dataset size, and the minimum-norm tie rule.
+\item We characterize the datasets whose full optimum needs $2d$ weighted
+examples to become a \emph{unique} selected ERM. Their nonzero gradients
+lie on $d$ independent lines, both orientations occur on each line, and
+every zero-gradient feature is zero. We separately state the exact
+criterion for the minimum-norm rule, which can exploit a rank-deficient
+objective.
+\item For every budget $d+k$, we give an explicit harmonic lower bound.
+We prove the same expression as an upper bound whenever the normalized
+loss admits a rank-additive conformal circuit decomposition. Direct sums
+of balanced simplex blocks are extremal in this class.
+\end{itemize}
+
+The last result is deliberately not presented as a solution of the full
+intermediate curve. Positive-basis structure permits overlapping circuits
+\citep{davis1954positive,schoch2020simplicial,hare2021positive}. Our exact
+argument covers rank-additive circuits, and computations suggest overlap
+helps, but a universal reduction remains open.
+
+\paragraph{Relation to other subset problems.}
+Strong regression coresets preserve the objective uniformly over all
+parameters, which is a different and generally more demanding target
+\citep{boutsidis2013coresets,feldman2020coresets}. Active regression chooses
+labels without seeing all responses \citep{chen2019active}. Machine
+teaching also optimizes training examples for a fixed learner, but commonly
+allows synthesis or targets parameter identification rather than the
+full-dataset loss \citep{ma2018teacher}. The present formulation follows
+\citet{hanneke2025data}: labels are known, selected examples must come from
+the dataset, and the learner is fixed.
+
+\section{Problem and Geometry}
+
+Let $D=\{(x_i,y_i)\}_{i=1}^N$ be a finite multiset in
+$\R^d\times\R$. Define
+\begin{equation}
+ L_D(w)=\frac1N\sum_{i=1}^N(x_i^\top w-y_i)^2,
+ \qquad L_D^*=\min_w L_D(w).
+\end{equation}
+For a convex combination $F=\sum_i\lambda_i\ell_i$, where
+$\lambda_i\geq0$, $\sum_i\lambda_i=1$, and
+$\ell_i(w)=(x_i^\top w-y_i)^2$, let $\cA_*(F)$ be its minimum-norm
+minimizer. The best loss using at most $n$ examples is
+\begin{equation}
+ L_D^*(n;\cA_*)=
+ \inf_{\substack{\lambda\geq0\\|\supp(\lambda)|\leq n}}
+ L_D\!\left(\cA_*\!\left(\sum_i\lambda_i\ell_i\right)\right).
+ \label{eq:selected}
+\end{equation}
+Repeated examples and zero weights make this equivalent to the original
+definition with $n$ selected examples. Ratios use the conventions of
+\citet{hanneke2025data}: $0/0=1$ and a positive numerator over zero is
+infinite.
+
+Assume first that the feature matrix has rank $d$. The full minimizer
+$w_*$ is unique. Put
+\begin{equation}
+ r_i=y_i-x_i^\top w_* ,\qquad g_i=r_i x_i,
+ \qquad H=\frac1N\sum_i x_ix_i^\top.
+ \label{eq:residual-gradient}
+\end{equation}
+The normal equations and Pythagorean identity are
+\begin{equation}
+ \sum_i g_i=0,\qquad
+ L_D(w_*+v)=L_D^*+v^\top Hv.
+ \label{eq:pythagorean}
+\end{equation}
+The vectors $g_i$ are the individual gradients at $w_*$ up to a common
+nonzero scalar and sign.
+
+The tie rule enters through one elementary criterion.
+
+\begin{lemma}[Exact selected ERM]
+\label{lem:tie}
+Let $S$ be the positive-weight support of a selected objective and let
+$W_S=\spanop\{x_i:i\in S\}$. Its minimum-norm ERM equals $w_*$ if and only
+if
+\begin{equation}
+ \sum_{i\in S}\lambda_i g_i=0
+ \quad\text{and}\quad w_*\in W_S.
+ \label{eq:tie-criterion}
+\end{equation}
+If $W_S=\R^d$, the second condition is automatic and $w_*$ is the unique
+selected ERM.
+\end{lemma}
+
+The first condition says that $w_*$ minimizes the selected quadratic. Its
+minimizer set is then $w_*+W_S^\perp$. The closest member to zero is $w_*$
+exactly when $w_*\perp W_S^\perp$, proving the lemma. This distinction is
+important. Translating $w_*$ to zero preserves loss differences but not the
+minimum-norm choice on rank-deficient supports.
+
+\paragraph{Positive bases.}
+A finite set positively spans a vector space if every vector is a
+nonnegative combination of its elements. An inclusion-minimal positive
+spanning set is a positive basis. A positive basis of $\R^q$ has between
+$q+1$ and $2q$ vectors. At the upper endpoint it is a cross:
+after rescaling, it has the form $\{\pm u_1,\ldots,\pm u_q\}$ for a linear
+basis $u_1,\ldots,u_q$ \citep{davis1954positive,regis2016positive}.
+
+\section{One Example Below Exactness}
+
+We first isolate the only configuration in which the standard $2d$ exact
+certificate genuinely needs all $2d$ examples.
+
+\begin{definition}[Unique-certificate number]
+For a full-rank dataset, let $c_{\rm u}(D)$ be the least support size of a
+weighted objective for which $w_*$ is the unique minimizer.
+\end{definition}
+
+\begin{theorem}[Cross dichotomy]
+\label{thm:cross}
+Every full-rank dataset satisfies $c_{\rm u}(D)\leq2d$. Equality holds if
+and only if there are independent lines
+$U_1,\ldots,U_d$ such that
+\begin{enumerate}
+\item every nonzero $g_i$ lies in some $U_j$,
+\item both orientations occur among the $g_i$ on every $U_j$, and
+\item $g_i=0$ implies $x_i=0$.
+\end{enumerate}
+If these conditions fail, $c_{\rm u}(D)\leq2d-1$.
+\end{theorem}
+
+\begin{proof}
+Let $V=\spanop\{g_i:g_i\neq0\}$ and $q=\dim V$. The nonzero $g_i$ have a
+strictly positive combination equal to zero. Steinitz's theorem therefore
+selects at most $2q$ of them that positively span $V$. Every nonzero-gradient
+feature belongs to $V$. Since all features span $\R^d$, we may add $d-q$
+zero-gradient features that extend $V$ to $\R^d$. Their union gives a
+unique exact objective on at most $d+q$ examples. Thus $q<d$ gives at most
+$2d-1$.
+
+Now let $q=d$ and choose a positive basis $B$ from the nonzero gradients.
+If $|B|\leq2d-1$, its positive dependence and full span give the claim.
+Otherwise $B$ is a cross $\{\pm u_j\}_{j=1}^d$. Write any other nonzero
+gradient as
+\begin{equation}
+ g=\sum_{j\in J}a_j s_j u_j,
+ \qquad a_j>0,\quad s_j\in\{-1,1\}.
+\end{equation}
+If $|J|\geq2$, then
+\begin{equation}
+ \{g\}\cup\{-s_j u_j:j\in J\}
+ \cup\{\pm u_\ell:\ell\notin J\}
+ \label{eq:replacement-cross}
+\end{equation}
+positively spans $\R^d$ and has $2d-|J|+1\leq2d-1$ elements. Hence every
+nonzero gradient must lie on a cross line if $c_{\rm u}(D)=2d$.
+
+Let $Z$ be the span of zero-gradient features and put $z=\dim Z$. If
+$z>0$, choose $z$ such features and $d-z$ cross lines that together span
+$\R^d$. A balancing pair from every chosen line plus the zero-gradient
+features gives a unique exact objective on $2(d-z)+z=2d-z$ examples. Thus
+$z=0$ is necessary.
+
+Conversely, under the three stated conditions, full selected feature rank
+requires using every line. Gradient balance holds independently on each
+line and needs both orientations. Therefore at least $2d$ positive-weight
+examples are necessary, while one balancing pair per line is sufficient.
+\end{proof}
+
+The theorem concerns uniqueness. By Lemma~\ref{lem:tie}, a rank-deficient
+objective can still return $w_*$ when its feature span contains $w_*$. On
+the exceptional branch, this tie behavior also has an exact description.
+
+\begin{corollary}[Min-norm compression on a cross]
+\label{cor:cross-compression}
+Suppose the three conditions of Theorem~\ref{thm:cross} hold, and write
+$w_*=\sum_{j=1}^d\beta_ju_j$. The least support size of a weighted
+objective whose minimum-norm ERM is $w_*$ equals one if $w_*=0$ and the
+dataset contains a zero-feature example. In every other case it equals
+\begin{equation}
+ 2\max\{1,|\{j:\beta_j\neq0\}|\}.
+ \label{eq:cross-compression}
+\end{equation}
+\end{corollary}
+
+For every nonzero coordinate $\beta_j$, the selected feature span must
+include $U_j$. Gradient balance on an independent cross line requires both
+orientations. Conversely, balancing pairs on precisely those lines have a
+minimizer set whose feature span contains $w_*$. If $w_*=0$, any one
+balancing pair suffices, while a zero-feature loss has minimum-norm ERM zero
+by itself. Thus $2d$ is necessary for the raw min-norm rule exactly when
+every $\beta_j$ is nonzero.
+
+\begin{theorem}[Sharp endpoint]
+\label{thm:endpoint}
+For every integer $d\geq1$,
+\begin{equation}
+ \sup_{D\subset\R^d\times\R}
+ \frac{L_D^*(2d-1;\cA_*)}{L_D^*}=1+\frac1d.
+ \label{eq:endpoint}
+\end{equation}
+\end{theorem}
+
+\begin{proof}[Upper bound]
+If the feature rank is $r<d$, the known $2r$ exact guarantee fits within
+$2d-1$. The same is immediate when $L_D^*=0$. Assume full rank and positive
+optimal loss. If Theorem~\ref{thm:cross} gives a unique exact support of
+size at most $2d-1$, there is nothing to prove. We may therefore work under
+its three cross conditions.
+
+Choose a nonzero vector $u_j$ on each cross line and write
+$x_i=\alpha_i u_j$ for indices $i\in I_j$. Put
+\begin{equation}
+ h_j=\frac1N\sum_{i\in I_j}\alpha_i^2,\qquad
+ A_j=\frac1N\sum_{i\in I_j}r_i^2.
+ \label{eq:line-shares}
+\end{equation}
+Examples with $x_i=0$ may add a constant to $L_D^*$ but do not enter these
+sums. Let $q_1,\ldots,q_d$ be the dual basis, so
+$u_\ell^\top q_j=\mathbf1\{\ell=j\}$. Equation~\eqref{eq:pythagorean}
+gives
+\begin{equation}
+ (tq_j)^\top H(tq_j)=h_jt^2.
+ \label{eq:dual-excess}
+\end{equation}
+Moreover $A_j/h_j$ is the $\alpha_i^2$-weighted average of
+$(r_i/\alpha_i)^2$. Hence there is an $i(j)\in I_j$ with
+\begin{equation}
+ h_j\left(\frac{r_{i(j)}}{\alpha_{i(j)}}\right)^2\leq A_j.
+ \label{eq:line-average}
+\end{equation}
+The line normal equation $\sum_{i\in I_j}r_i\alpha_i=0$ provides an example
+with opposite gradient orientation to $i(j)$.
+
+Pick a line $j$ with $A_j\leq L_D^*/d$. On every other line choose a
+balancing pair. On line $j$ keep only $i(j)$. Weight each pair so its
+gradient at $w_*$ cancels. The selected features span $\R^d$, and the
+selected objective separates in the coordinates $u_\ell^\top(w-w_*)$.
+Its unique minimizer is
+\begin{equation}
+ w_*+\frac{r_{i(j)}}{\alpha_{i(j)}}q_j.
+\end{equation}
+Equations~\eqref{eq:dual-excess} and \eqref{eq:line-average} bound its
+full loss by $L_D^*+A_j\leq(1+1/d)L_D^*$.
+\end{proof}
+
+\begin{proof}[Lower bound]
+Use the $2d$ examples
+\begin{equation}
+ (e_j,0),\quad(-e_j,-2),\qquad j=1,\ldots,d.
+ \label{eq:cross-lower}
+\end{equation}
+The full ERM is $w_*=(1,\ldots,1)$ and $L_D^*=1$. Any support of size at
+most $2d-1$ leaves some coordinate with at most one selected example. A
+singleton makes that coordinate zero or two. With no selected example, the
+minimum-norm rule makes it zero. Its two full-data losses therefore sum to
+four instead of the optimal two. All other coordinates contribute at least
+their optimal value, so the ratio is at least $1+1/d$. Equal weights on
+complete pairs and one singleton attain equality.
+\end{proof}
+
+\begin{proposition}[Instance-dependent cross bound]
+\label{prop:instance}
+Under the cross conditions, define
+\begin{equation}
+ B_j=h_j\min_{i\in I_j}\left(\frac{r_i}{\alpha_i}\right)^2.
+ \label{eq:instance-bound}
+\end{equation}
+There is a full-rank support of size $2d-1$ whose full-loss excess is
+exactly $\min_jB_j$. Moreover,
+\begin{equation}
+ \min_jB_j\leq\min_jA_j\leq\frac{L_D^*}{d}.
+\end{equation}
+\end{proposition}
+
+The construction in the upper-bound proof gives the first statement after
+choosing the best line and singleton. The averaging argument
+\eqref{eq:line-average} gives the inequalities. Thus a line containing an
+example with a small residual-to-feature ratio can make the endpoint loss
+much smaller than the universal $1+1/d$ bound.
+
+\paragraph{Generic datasets are easier.}
+If the nonzero gradients span $\R^d$ and are in linear general position,
+an inclusion-minimal positive dependence has exactly $d+1$ elements and
+spans $\R^d$. Thus $d+1$ examples recover $w_*$ uniquely. The intermediate
+worst case is entirely a degeneracy phenomenon, with the endpoint extremum
+at the maximally degenerate cross.
+
+\paragraph{Constructive extraction.}
+All supports in the proof can be found in polynomial time. Compute $w_*$,
+the gradients $g_i$, and bases for their span and the zero-gradient feature
+span. Repeatedly delete a gradient whenever the remainder still positively
+spans the same space. Each test is a linear program, and the terminal set is
+a positive basis of size at most twice its rank. A size-$2d$ terminal basis
+is a cross. Equation~\eqref{eq:replacement-cross} either replaces it by a
+smaller exact certificate, or \eqref{eq:instance-bound} chooses the
+singleton. Positive balancing weights follow from one final linear
+feasibility problem. The endpoint guarantee is therefore constructive, not
+only existential.
+
+\section{All-Budget Harmonic Lower Bound}
+
+Write the intermediate budget as $n=d+k$ with $0\leq k<d$. For
+$m\in\{k+1,\ldots,d\}$ define
+\begin{equation}
+ H(d,m)=\min_{\substack{b_j\in\mathbb N\\\sum_{j=1}^m b_j=d}}
+ \sum_{j=1}^m\frac1{b_j}.
+ \label{eq:harmonic}
+\end{equation}
+If $d=qm+r$ with $0\leq r<m$, convexity of $1/x$ gives
+\begin{equation}
+ H(d,m)=\frac{m-r}{q}+\frac{r}{q+1}.
+ \label{eq:harmonic-closed}
+\end{equation}
+Set
+\begin{equation}
+ \Psi(d,k)=\max_{m=k+1,\ldots,d}\frac{m-k}{H(d,m)}.
+ \label{eq:psi}
+\end{equation}
+
+\begin{theorem}[Intermediate lower bound]
+\label{thm:lower}
+For every $0\leq k<d$,
+\begin{equation}
+ \sup_D\frac{L_D^*(d+k;\cA_*)}{L_D^*}
+ \geq 1+\Psi(d,k).
+ \label{eq:general-lower}
+\end{equation}
+At $k=0$ this is $d+1$, and at $k=d-1$ it is $1+1/d$.
+\end{theorem}
+
+\begin{table}[t]
+\caption{The lower-bound excess $\Psi(d,k)$ for small dimensions. The
+selected budget is $d+k$.}
+\label{tab:psi}
+\centering
+\small
+\begin{tabular}{c@{\quad}cccccc}
+\toprule
+$d\backslash k$ & 0 & 1 & 2 & 3 & 4 & 5\\
+\midrule
+2 & $2$ & $1/2$ \\
+3 & $3$ & $2/3$ & $1/3$ \\
+4 & $4$ & $1$ & $1/2$ & $1/4$ \\
+5 & $5$ & $6/5$ & $3/5$ & $2/5$ & $1/5$ \\
+6 & $6$ & $3/2$ & $2/3$ & $1/2$ & $1/3$ & $1/6$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The construction uses orthogonal simplex blocks. For a composition
+$d=b_1+\cdots+b_m$, block $j$ contains the standard $b_j+1$-point
+simplex lower instance for size-$b_j$ regression. Give it optimal-loss
+share
+\begin{equation}
+ a_j=\frac{1/b_j}{\sum_{\ell=1}^m1/b_\ell}.
+ \label{eq:equalize}
+\end{equation}
+Using $b_j$ examples in that block incurs excess $b_ja_j$, while using all
+$b_j+1$ removes the excess. A large parameter offset makes fewer than
+$b_j$ examples no better under the minimum-norm rule. Every finite-ratio
+selection spends the baseline $\sum_jb_j=d$ examples, and each of the $k$
+remaining examples can complete one block. Equation~\eqref{eq:equalize}
+equalizes all block excesses, leaving $(m-k)/\sum_j1/b_j$. The appendix
+gives the finite-offset construction and limiting argument.
+
+The lower bound has two regimes up to integer effects. The maximizing
+$m$ is near $2k$ while $k\lesssim d/2$, giving excess about $d/(4k)$.
+Once $m=d$ binds, the excess is $(d-k)/d$. The latter includes the endpoint
+proved universally above.
+
+\section{When the Harmonic Curve Is Exact}
+
+The lower construction belongs to a broader class on which
+\eqref{eq:general-lower} is also an upper bound. This result explains why
+simplex blocks arise and states precisely which reduction is missing in the
+general case.
+
+Whiten the full loss around $w_*$ so that
+\begin{equation}
+ \sum_i p_ix_ix_i^\top=I,\quad
+ \sum_i p_ir_ix_i=0,\quad
+ \sum_i p_ir_i^2=1.
+ \label{eq:normal-form}
+\end{equation}
+Then the full loss ratio at $w_*+v$ is $1+\|v\|^2$. Splitting an example
+weight into nonnegative pieces does not change the objective and lets one
+treat repeated circuit occurrences separately.
+
+\begin{definition}[Rank-additive circuit decomposition]
+\label{def:circuits}
+A normalized instance is rank-additive circuit decomposable if its weighted
+loss can be split into $m$ centered circuit quadratics
+\begin{equation}
+ F_j(v)=\|U_jv-s_j\|^2=a_j+v^\top H_jv,
+ \quad H_j=U_j^\top U_j,
+ \label{eq:circuit-quadratic}
+\end{equation}
+where $U_j$ has $b_j+1$ rows and rank $b_j$, $U_j^\top s_j=0$,
+$a_j=\|s_j\|^2$, and
+\begin{equation}
+ \sum_jH_j=I,\quad \sum_ja_j=1,\quad \sum_jb_j=d.
+ \label{eq:rank-additive}
+\end{equation}
+Every row occurrence must be a nonnegative scaling of an original example
+loss.
+\end{definition}
+
+The condition arises from a conformal circuit decomposition of the full
+residual in the kernel of the design. Rank additivity is the substantive
+part. General decompositions can have overlapping circuits whose ranks sum
+to more than $d$.
+
+\begin{theorem}[Circuit sparsification]
+\label{thm:circuits}
+Under Definition~\ref{def:circuits}, for every $K\subseteq[m]$ there is a
+weighted support of at most $d+|K|$ original examples with full-loss excess
+at most
+\begin{equation}
+ \sum_{j\notin K}b_ja_j.
+ \label{eq:circuit-bound}
+\end{equation}
+Consequently the worst ratio over rank-additive circuit decomposable
+instances at budget $d+k$ is exactly $1+\Psi(d,k)$.
+\end{theorem}
+
+\begin{proof}
+Choose full-column factors $H_j=B_jB_j^\top$, with
+$B_j\in\R^{d\times b_j}$, and concatenate them as
+$B=[B_1\ \cdots\ B_m]$. By \eqref{eq:rank-additive}, $B$ is square and
+$BB^\top=I$. Thus $B$ is orthogonal. It follows that the columns within
+each $B_j$ are orthonormal, columns from different factors are orthogonal,
+and $H_j=B_jB_j^\top$ is the orthogonal projector onto its range.
+
+Write $\widetilde U_j=U_jB_j$. Since $U_j$ vanishes on the orthogonal
+complement of $\operatorname{range}(H_j)$, this gives the intrinsic
+factorization $U_j=\widetilde U_jB_j^\top$. Moreover,
+$\widetilde U_j^\top\widetilde U_j=I_{b_j}$,
+$\widetilde U_j^\top s_j=0$, and
+$\|s_j\|^2=a_j$. Hence the square augmented matrix
+\begin{equation}
+ [\,\widetilde U_j\ \ s_j/\sqrt{a_j}\,]
+\end{equation}
+is orthogonal when $a_j>0$.
+
+Omit one of the $b_j+1$ circuit rows with probability proportional to the
+squared volume of the remaining $b_j$ design rows. The resulting
+interpolator $v_j$ has
+\begin{equation}
+ \E v_j=0,\qquad \E[v_jv_j^\top]=a_jH_j,\qquad
+ \E\|v_j\|^2=b_ja_j.
+ \label{eq:circuit-covariance}
+\end{equation}
+These identities follow directly by viewing the omitted row of the
+orthogonal augmented matrix as its cofactor vector. They also follow from
+the size-$b_j$ volume-sampling identity.
+
+For $j\in K$, retain all $b_j+1$ rows and use its centered circuit weights.
+For $j\notin K$, retain the random $b_j$-row basis. Orthogonality makes the
+global selected ERM the sum of the incomplete-circuit interpolators. Thus
+its expected squared norm is the right side of
+\eqref{eq:circuit-bound}. Some deterministic choice is no worse. It uses
+$\sum_jb_j+|K|=d+|K|$ row occurrences and no more original examples.
+
+If $m\leq k$, the selector completes every circuit and is exact. Otherwise,
+for fixed $b_j$, it completes the $k$ largest values $b_ja_j$. The exact
+allocation identity for $m\geq k+1$ is
+\begin{equation}
+ \sup_{a\geq0,\ \sum a_j\leq1}
+ \min_{|K|=k}\sum_{j\notin K}b_ja_j
+ =\max_{\substack{J\subseteq[m]\\|J|\geq k+1}}
+ \frac{|J|-k}{\sum_{j\in J}1/b_j}.
+ \label{eq:minimax}
+\end{equation}
+It is proved in the appendix. The active subset $J$ allows zero loss on
+some circuit blocks. Optimizing also over the number and integer ranks of
+the circuits reduces the right side to $\Psi(d,k)$. Theorem~\ref{thm:lower}
+supplies equality.
+\end{proof}
+
+\section{Discussion}
+
+The endpoint $2d-1$ is governed by a sharp geometric dichotomy. A single
+gradient involving two cross coordinates creates a smaller positive basis.
+A single nonzero zero-gradient feature also lowers the exact unique-ERM
+certificate. Only the cross survives, and its loss allocation forces the
+$1/d$ constant. This is why the endpoint admits an exact argument despite
+the mismatch between volume sampling and Steinitz sparsification.
+
+The all-budget lower bound suggests the curve $1+\Psi(d,k)$. Theorem
+\ref{thm:circuits} proves it whenever conformal circuits are rank additive.
+Positive-basis decompositions need not have this property. Their simplices
+may overlap through critical vectors \citep{schoch2020simplicial,
+hare2021positive}. Such overlap gives additional cancellation routes in
+small-dimensional exact optimization, but turning that observation into a
+universal inequality remains the central open step.
+
+Regularized volume sampling controls inverse Hessians under stochastic
+noise assumptions \citep{derezinski2018ridge}. It does not control the
+fixed residual-induced bias here. Ordinary size-$s>d$ volume sampling also
+lacks a response-uniform loss identity \citep{derezinski2018reverse}. The
+circuit proof succeeds because each local residual space is one-dimensional
+and rank additivity makes its covariance orthogonal to every other circuit.
+
+\bibliography{references}
+
+\appendix
+
+\section{Additional Linear-Algebra Details}
+
+\begin{proof}[Expanded proof of Lemma~\ref{lem:tie}]
+The selected objective has gradient at $w_*$ equal to
+$-2\sum_{i\in S}\lambda_i g_i$. Therefore its first condition for
+optimality is exactly the first part of \eqref{eq:tie-criterion}. Under this
+condition its value at $w_*+v$ differs from its value at $w_*$ by
+\begin{equation}
+ \sum_{i\in S}\lambda_i(x_i^\top v)^2.
+\end{equation}
+Its minimizer set is $w_*+W_S^\perp$. The minimum-norm member of this affine
+space is the orthogonal projection of $w_*$ onto $W_S$. It equals $w_*$ if
+and only if $w_*\in W_S$.
+\end{proof}
+
+\begin{lemma}[Cross replacement]
+\label{lem:replacement}
+Let $B=\{\pm u_1,\ldots,\pm u_d\}$ be a cross. If a nonzero vector $g$
+has at least two nonzero coordinates in the basis $(u_j)$, then
+$B\cup\{g\}$ contains a positive spanning subset of size at most $2d-1$.
+\end{lemma}
+
+\begin{proof}
+Write $g=\sum_{j\in J}a_js_ju_j$ with $a_j>0$ and $s_j\in\{-1,1\}$.
+The set $\{g\}\cup\{-s_ju_j:j\in J\}$ positively spans the coordinate
+subspace indexed by $J$, because
+$g+\sum_{j\in J}a_j(-s_ju_j)=0$ is a strictly positive dependence and the
+set spans that subspace. Add both orientations on every coordinate outside
+$J$. The union positively spans $\R^d$ and has
+$1+|J|+2(d-|J|)=2d-|J|+1\leq2d-1$ elements.
+\end{proof}
+
+\section{Finite Lower-Bound Construction}
+\label{app:lower}
+
+Fix a block dimension $b$ and an offset $M>0$. Use features
+\begin{equation}
+ e_1,\ldots,e_b,-\mathbf1_b
+\end{equation}
+and responses
+\begin{equation}
+ M,2M,\ldots,bM,
+ -M\frac{b(b+1)}2-b-1.
+ \label{eq:block-responses}
+\end{equation}
+The full minimizer is
+\begin{equation}
+ w_*=(M+1,2M+1,\ldots,bM+1),
+\end{equation}
+and every one of the $b+1$ residuals has magnitude one. The average optimal
+loss is one. Omitting any one point and interpolating the other $b$ makes
+the omitted residual have magnitude $b+1$. Hence the full average loss is
+$b+1$, with excess $b$.
+
+Consider any support with fewer than $b$ distinct examples. Its selected
+rows are linearly independent, so every positive weighting has zero selected
+loss and returns the minimum-norm interpolator of those rows. If
+$-\mathbf1_b$ is absent, at least one omitted basis coordinate is set to
+zero, while its response has magnitude at least $M$. The full loss therefore
+diverges with $M$.
+
+If $-\mathbf1_b$ is present, at most $b-2$ basis rows are present. Let $J$
+be the set of at least two omitted basis coordinates. The minimum-norm
+solution assigns a common value to every coordinate in $J$, because their
+only constraint is their sum. Two distinct targets in $J$ differ by at
+least $M$. For any common prediction $c$ and two such indices $q\ne r$,
+\begin{equation}
+ (c-qM)^2+(c-rM)^2\geq \frac{(q-r)^2M^2}{2}\geq\frac{M^2}{2}.
+\end{equation}
+Thus the full loss again diverges as $M\to\infty$. This is the same offset
+device used for the sharp size-$d$ regression lower bound of
+\citet{hanneke2025data}.
+
+Take orthogonal copies with dimensions $b_1,\ldots,b_m$. Scale all responses
+in block $j$ so its contribution to the full optimal loss is $a_j$. Orthogonal
+features make both the selected ERM and full loss decompose blockwise. In
+the limit $M\to\infty$, a finite-ratio support uses at least $b_j$ examples
+in every block. With exactly $b_j$ its excess contribution is $b_ja_j$.
+With $b_j+1$ it is zero. A budget $d+k$ completes at most $k$ blocks.
+Choosing \eqref{eq:equalize} proves Theorem~\ref{thm:lower}. For every finite
+$M$ this is a finite dataset, so taking $M\to\infty$ is valid for the
+supremum in \eqref{eq:general-lower}.
+
+\section{The Allocation Identity}
+
+\begin{proof}[Proof of \eqref{eq:minimax}]
+Put $c_j=b_ja_j$ and let $T(c)$ be the sum of the $m-k$ smallest $c_j$.
+For any active set $J$ with $|J|\geq k+1$, set $c_j=t$ on $J$ and zero
+outside, where $t=(\sum_{j\in J}1/b_j)^{-1}$. This is feasible and gives
+$T(c)=(|J|-k)t$, proving the lower bound in \eqref{eq:minimax}.
+
+For the reverse bound use the layer-cake identities
+\begin{align}
+ T(c)&=\int_0^\infty (|J_t|-k)_+\,dt,\\
+ \sum_j\frac{c_j}{b_j}
+ &=\int_0^\infty\sum_{j\in J_t}\frac1{b_j}\,dt,
+ \end{align}
+where $J_t=\{j:c_j\geq t\}$. If the right side of
+\eqref{eq:minimax} is $\Phi$, its definition gives
+$(|J_t|-k)_+\leq\Phi\sum_{j\in J_t}1/b_j$ at every $t$. Integration gives
+$T(c)\leq\Phi\sum_jc_j/b_j\leq\Phi$.
+\end{proof}
+
+To optimize over compositions, fix an active subset $J$ of size $\ell$.
+Since $\sum_{j\in J}b_j\leq d$, adding unused dimensions to these blocks can
+only decrease $\sum_{j\in J}1/b_j$. Hence
+\begin{equation}
+ \sum_{j\in J}\frac1{b_j}\geq H(d,\ell).
+\end{equation}
+The corresponding allocation value is at most
+$(\ell-k)/H(d,\ell)\leq\Psi(d,k)$. Conversely, take $m=\ell$, use the
+balanced composition attaining $H(d,\ell)$, and activate every block. This
+proves that the worst fixed-composition value, optimized over all
+compositions, is exactly $\Psi(d,k)$.
+
+\section{Circuit Covariance Identity}
+
+Let $U\in\R^{(b+1)\times b}$ satisfy $U^\top U=I_b$, and let
+$s\in\ker(U^\top)$ have $\|s\|^2=a>0$. Then
+\begin{equation}
+ Q=[\,U\ \ s/\sqrt a\,]
+\end{equation}
+is an orthogonal matrix. For omission $i$, let $U_{-i}$ and $s_{-i}$ remove
+row $i$, and put $z=s/\sqrt a$. Cofactor identities give the determinant
+formula below. Orthogonality of row $i$ with every remaining row gives
+$U_{-i}u_i+z_{-i}z_i=0$, and therefore
+\begin{equation}
+ \det(U_{-i})^2=\frac{s_i^2}{a},\qquad
+ U_{-i}^{-1}s_{-i}=-\sqrt a\,\frac{u_i}{s_i/\sqrt a},
+ \label{eq:cofactor}
+\end{equation}
+where $u_i^\top$ is row $i$ of $U$. Consequently volume sampling has
+probabilities $s_i^2/a$ and
+\begin{align}
+ \E[U_{-i}^{-1}s_{-i}]&=0,\\
+ \E[(U_{-i}^{-1}s_{-i})(U_{-i}^{-1}s_{-i})^\top]
+ &=a\sum_i u_iu_i^\top=aI_b.
+\end{align}
+The mean identity is also the standard unbiasedness of size-$b$ volume
+sampling. Mapping intrinsic coordinates back to the range of $H_j$ proves
+\eqref{eq:circuit-covariance}. The case $a=0$ follows by continuity and has
+zero excess.
+
+\end{document}
